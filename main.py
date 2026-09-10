@@ -154,19 +154,140 @@ for date, amount in daily_total.items():
     print("{}：{} 元".format(date.strftime("%Y-%m-%d"), round(amount, 2)))
 
 # ==============================
+# 自动生成文字分析报告
+# ==============================
+
+student_number = data["学生ID"].nunique()
+start_date = data["日期"].min().strftime("%Y-%m-%d")
+end_date = data["日期"].max().strftime("%Y-%m-%d")
+
+top_type = type_total.idxmax()
+top_type_amount = type_total.max()
+top_type_ratio = top_type_amount / total_amount * 100
+
+max_payment_count = int(payment_count.max())
+most_used_payments = payment_count[
+    payment_count == max_payment_count
+].index.tolist()
+
+max_daily_amount = daily_total.max()
+top_dates = daily_total[daily_total == max_daily_amount].index.tolist()
+top_date_text = "、".join([
+    date.strftime("%Y-%m-%d") for date in top_dates
+])
+
+report_lines = [
+    "校园消费数据分析报告",
+    "=" * 30,
+    "",
+    "一、数据基本情况",
+    "数据记录数：{} 条".format(count),
+    "学生数量：{} 人".format(student_number),
+    "数据日期范围：{} 至 {}".format(start_date, end_date),
+    "",
+    "二、整体消费情况",
+    "总消费金额：{:.2f} 元".format(total_amount),
+    "平均每笔消费：{:.2f} 元".format(average_amount),
+    "单笔最高消费：{:.2f} 元".format(max_amount),
+    "单笔最低消费：{:.2f} 元".format(min_amount),
+    "",
+    "三、学生消费情况",
+    "消费金额最高的学生：{}".format(top_student),
+    "该学生的消费金额：{:.2f} 元".format(top_amount),
+    "消费次数最多的学生：{}（{} 次）".format(
+        "、".join(most_frequent_students), most_frequent_count
+    ),
+    "学生消费排行榜：",
+]
+
+for rank, (student_id, amount) in enumerate(student_ranking.items(), start=1):
+    report_lines.append(
+        "  第{}名：{}，{:.2f} 元".format(rank, student_id, amount)
+    )
+
+report_lines.extend([
+    "",
+    "四、消费类型分析",
+    "各消费类型金额：",
+])
+
+for consumption_type, amount in type_total.sort_values(ascending=False).items():
+    report_lines.append("  {}：{:.2f} 元".format(consumption_type, amount))
+
+report_lines.extend([
+    "消费金额最高的类型：{}".format(top_type),
+    "该类型消费金额：{:.2f} 元".format(top_type_amount),
+    "该类型约占总消费金额的 {:.1f}%".format(top_type_ratio),
+    "",
+    "五、支付方式分析",
+    "各支付方式使用次数和消费金额：",
+])
+
+for payment_method in payment_count.sort_values(ascending=False).index:
+    report_lines.append(
+        "  {}：{} 次，{:.2f} 元".format(
+            payment_method,
+            int(payment_count[payment_method]),
+            payment_total[payment_method],
+        )
+    )
+
+report_lines.extend([
+    "使用次数最多的支付方式：{}（{} 次）".format(
+        "、".join(most_used_payments), max_payment_count
+    ),
+    "",
+    "六、每日消费趋势",
+    "每日消费金额：",
+])
+
+for date, amount in daily_total.items():
+    report_lines.append(
+        "  {}：{:.2f} 元".format(date.strftime("%Y-%m-%d"), amount)
+    )
+
+report_lines.extend([
+    "消费金额最高的一天：{}，{:.2f} 元".format(
+        top_date_text, max_daily_amount
+    ),
+    "",
+    "七、简单总结",
+    "从当前数据来看，学生消费主要集中在{}，该类别消费金额为{:.2f}元，"
+    "约占总消费金额的{:.1f}%。".format(
+        top_type, top_type_amount, top_type_ratio
+    ),
+    "消费金额最高的学生是{}，累计消费{:.2f}元。".format(
+        top_student, top_amount
+    ),
+    "在支付方式方面，{}使用最频繁，共使用{}次。".format(
+        "、".join(most_used_payments), max_payment_count
+    ),
+    "{}的消费金额最高，为{:.2f}元。".format(
+        top_date_text, max_daily_amount
+    ),
+])
+
+report_path = os.path.join(project_dir, "analysis_report.txt")
+with open(report_path, "w", encoding="utf-8") as report_file:
+    report_file.write("\n".join(report_lines))
+
+print("\n分析报告已生成：analysis_report.txt")
+
+# ==============================
 # 消费类型柱状图
 # ==============================
 
-plt.figure(figsize=(8, 5))
-type_total.plot(kind="bar")
-plt.title("校园消费类型统计")
-plt.xlabel("消费类型")
-plt.ylabel("消费金额（元）")
-plt.xticks(rotation=0)
-plt.tight_layout()
+fig, ax = plt.subplots(figsize=(8, 5))
+type_total.plot(kind="bar", ax=ax)
+ax.set_title("校园消费类型统计")
+ax.set_xlabel("消费类型")
+ax.set_ylabel("消费金额（元）")
+ax.tick_params(axis="x", rotation=0)
+fig.tight_layout()
 
 type_chart_path = os.path.join(project_dir, "消费类型统计.png")
-plt.savefig(type_chart_path)
+fig.savefig(type_chart_path, dpi=150)
+plt.close(fig)
 print("\n图表已生成：消费类型统计.png")
 
 # ==============================
@@ -176,25 +297,113 @@ print("\n图表已生成：消费类型统计.png")
 date_labels = [date.strftime("%Y-%m-%d") for date in daily_total.index]
 x_positions = list(range(len(date_labels)))
 
-plt.figure(figsize=(9, 5))
-plt.plot(x_positions, daily_total.values, marker="o")
-plt.title("校园每日消费趋势")
-plt.xlabel("日期")
-plt.ylabel("消费金额（元）")
-plt.grid(axis="y", linestyle="--", alpha=0.5)
+fig, ax = plt.subplots(figsize=(9, 5))
+ax.plot(x_positions, daily_total.values, marker="o")
+ax.set_title("校园每日消费趋势")
+ax.set_xlabel("日期")
+ax.set_ylabel("消费金额（元）")
+ax.grid(axis="y", linestyle="--", alpha=0.5)
 
 # 日期较多时减少显示的刻度，避免标签严重重叠
-tick_step = max(1, len(date_labels) // 10)
+tick_step = max(1, (len(date_labels) + 9) // 10)
 tick_positions = x_positions[::tick_step]
 tick_labels = date_labels[::tick_step]
-plt.xticks(tick_positions, tick_labels, rotation=45, ha="right")
-plt.tight_layout()
+ax.set_xticks(tick_positions)
+ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+fig.tight_layout()
 
 trend_chart_path = os.path.join(project_dir, "每日消费趋势.png")
-plt.savefig(trend_chart_path)
+fig.savefig(trend_chart_path, dpi=150)
+plt.close(fig)
 print("图表已生成：每日消费趋势.png")
 
-plt.show()
+# ==============================
+# 学生消费排行榜柱状图
+# ==============================
+
+student_labels = student_ranking.index.tolist()
+student_values = student_ranking.values
+student_positions = list(range(len(student_labels)))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+student_bars = ax.bar(student_positions, student_values, color="#4C78A8")
+ax.set_title("学生消费排行榜")
+ax.set_xlabel("学生 ID")
+ax.set_ylabel("消费金额（元）")
+ax.set_xticks(student_positions)
+ax.set_xticklabels(student_labels)
+
+# 在柱子顶部显示消费金额
+for bar, amount in zip(student_bars, student_values):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height(),
+        "{:.2f}".format(amount),
+        ha="center",
+        va="bottom",
+    )
+
+fig.tight_layout()
+student_chart_path = os.path.join(project_dir, "学生消费排行榜.png")
+fig.savefig(student_chart_path, dpi=150)
+plt.close(fig)
+print("图表已生成：学生消费排行榜.png")
+
+# ==============================
+# 消费类型占比饼图
+# ==============================
+
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.pie(
+    type_total.values,
+    labels=type_total.index,
+    autopct="%1.1f%%",
+    startangle=90,
+    labeldistance=1.08,
+    pctdistance=0.72,
+)
+ax.set_title("消费类型占比")
+ax.axis("equal")
+fig.tight_layout()
+
+type_ratio_chart_path = os.path.join(project_dir, "消费类型占比.png")
+fig.savefig(type_ratio_chart_path, dpi=150)
+plt.close(fig)
+print("图表已生成：消费类型占比.png")
+
+# ==============================
+# 支付方式使用次数柱状图
+# ==============================
+
+payment_count_ranking = payment_count.sort_values(ascending=False)
+payment_labels = payment_count_ranking.index.tolist()
+payment_values = payment_count_ranking.values
+payment_positions = list(range(len(payment_labels)))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+payment_bars = ax.bar(payment_positions, payment_values, color="#59A14F")
+ax.set_title("支付方式使用情况")
+ax.set_xlabel("支付方式")
+ax.set_ylabel("使用次数")
+ax.set_xticks(payment_positions)
+ax.set_xticklabels(payment_labels)
+ax.set_ylim(0, max(payment_values) * 1.15)
+
+# 在柱子顶部显示使用次数
+for bar, usage_count in zip(payment_bars, payment_values):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height(),
+        str(int(usage_count)),
+        ha="center",
+        va="bottom",
+    )
+
+fig.tight_layout()
+payment_chart_path = os.path.join(project_dir, "支付方式统计.png")
+fig.savefig(payment_chart_path, dpi=150)
+plt.close(fig)
+print("图表已生成：支付方式统计.png")
 
 print("\n================================")
 print("分析完成！")
