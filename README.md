@@ -2,22 +2,37 @@
 
 ## 一、项目简介
 
-这是一个兼容 Python 3.7 的校园消费数据分析项目。项目从模拟数据生成开始，依次完成 CSV 存储、数据清洗、SQLite 数据库导入、SQL 聚合查询、Pandas 二次处理、Matplotlib 可视化和自动报告生成。
+这是一个校园消费数据分析项目。项目从模拟数据生成开始，依次完成 CSV 存储、数据清洗、SQLite 数据库导入、SQL 聚合查询、Pandas 二次处理、Matplotlib 可视化和自动报告生成，并提供 Streamlit 交互式数据看板。
 
 项目保留了 Pandas 分析路线，同时增加了独立的 SQLite / SQL 分析路线。两条路线会对记录数、总消费金额、消费最高学生和各消费类型金额进行一致性检查。
 
 ## 二、技术栈与运行环境
 
-- Python 3.7.0
-- pandas 0.23.4
-- matplotlib 2.2.3
+- Python
+- Pandas
+- Matplotlib
 - SQLite / SQL（Python 标准库 `sqlite3`）
+- Streamlit
 - Git / GitHub
 
-SQLite 不需要安装额外依赖，也没有使用 SQLAlchemy。安装项目依赖：
+项目采用两个互不覆盖的 Python 环境：
+
+| 用途 | Python | Pandas | Matplotlib | Streamlit | 依赖文件 |
+| --- | --- | --- | --- | --- | --- |
+| 主分析流程 | 3.7.0 | 0.23.4 | 2.2.3 | 不使用 | `requirements.txt` |
+| 交互式看板 | 3.10.11 | 2.2.2 | 3.8.4 | 1.37.1 | `requirements-dashboard.txt` |
+
+SQLite 不需要安装额外依赖，也没有使用 SQLAlchemy。原有主分析环境安装命令：
 
 ```bash
 python -m pip install -r requirements.txt
+```
+
+看板使用项目内独立虚拟环境 `.venv-dashboard`，不要把该目录提交到 Git：
+
+```powershell
+"C:\Users\linyu\AppData\Local\Programs\Python\Python310\python.exe" -m venv .venv-dashboard
+.venv-dashboard\Scripts\python.exe -m pip install -r requirements-dashboard.txt
 ```
 
 ## 三、数据说明
@@ -50,9 +65,9 @@ python -m pip install -r requirements.txt
 generate_data.py
         ↓
      data.csv
-        ↓
-      main.py
-      ↙    ↘
+      ↙     ↘
+  main.py   app.py
+  ↙    ↘       ↓
   Pandas   SQLite 数据库
      ↓          ↓
 统计与清洗     SQL 查询分析
@@ -60,13 +75,15 @@ generate_data.py
      └──→ Pandas DataFrame
                     ↓
                Matplotlib
-                    ↓
+               ↙         ↘
+       静态图表与报告   Streamlit 看板
+
       analysis_report.txt
       sql_analysis_report.txt
       output/ 下的分析图表
 ```
 
-`main.py` 是项目总入口。每次运行都会保留并执行第四轮的 Pandas 分析，同时重建 SQLite 表内数据、执行 SQL 查询、生成 SQL 图表和 SQL 报告。
+`main.py` 是批量分析入口。每次运行都会保留并执行第四轮的 Pandas 分析，同时重建 SQLite 表内数据、执行 SQL 查询、生成 SQL 图表和 SQL 报告。`app.py` 是独立的只读看板入口，读取现有 `data.csv` 和 `campus_consumption.db`，页面刷新不会重建或追加数据库。
 
 ## 五、主要功能
 
@@ -125,12 +142,28 @@ SQL 查询保持简洁，便于学习和面试时逐条解释。
 
 金额统一保留两位小数后比较。如果结果不一致，程序会给出中文错误信息并停止。
 
+### 5. Streamlit 交互式看板
+
+`app.py` 使用侧边栏导航，避免把所有内容堆在一个超长页面。看板包含：
+
+- 数据总览：总金额、记录数、学生数、笔均、人均和日期范围
+- 消费趋势：每日与月度消费金额趋势
+- 学生消费分析：动态计算消费金额 Top 10，并同时显示图表和表格
+- 消费类型分析：总金额、消费次数和平均金额
+- 支付方式分析：使用次数和消费金额
+- 工作日 / 周末分析：金额和次数对比
+- SQL 分析结果：复用 `sql_analysis.py` 的 `read_sql_results()`，展示真实 SQLite 查询结果
+- 原始数据预览：最多显示当前筛选结果的前 50 条
+
+侧边栏支持日期范围、消费类型多选和支付方式多选。总览指标、Pandas 图表、排行榜和数据预览会随筛选条件更新；筛选结果为空时显示中文提示。
+
 ## 六、项目结构
 
 ```text
 campus-consumption-analysis/
 ├── generate_data.py          # 使用固定随机种子生成模拟数据
 ├── main.py                   # 项目总入口，运行 Pandas 与 SQL 两条分析流程
+├── app.py                    # Streamlit 交互式看板，只读 CSV 和 SQLite
 ├── database.py               # SQLite 连接、建表、CSV 验证和可重复导入
 ├── sql_analysis.py           # SQL 查询、结果展示、SQL 图表和报告生成
 ├── data.csv                  # 当前 2000 条模拟校园消费数据
@@ -139,6 +172,7 @@ campus-consumption-analysis/
 ├── analysis_report.txt       # Pandas 分析自动报告
 ├── sql_analysis_report.txt   # SQL 查询结果自动报告
 ├── requirements.txt          # pandas 和 matplotlib 兼容版本
+├── requirements-dashboard.txt # Python 3.10 看板环境固定依赖
 ├── README.md                 # 项目说明
 └── output/                   # 全部分析图表
     ├── 消费类型统计.png
@@ -155,7 +189,9 @@ campus-consumption-analysis/
 
 ## 七、运行步骤
 
-在项目目录中依次执行：
+### 1. 主分析流程（Python 3.7.0）
+
+在原有 Anaconda / Python 3.7.0 环境中依次执行：
 
 ```bash
 python generate_data.py
@@ -180,6 +216,16 @@ python main.py
 python database.py
 python sql_analysis.py
 ```
+
+### 2. Streamlit 看板（Python 3.10.11 独立环境）
+
+先运行主分析流程，确保 CSV、SQLite 和两份报告已经初始化，再启动看板：
+
+```powershell
+.venv-dashboard\Scripts\python.exe -m streamlit run app.py
+```
+
+浏览器打开终端显示的本地地址即可使用。看板默认展示全部 2000 条模拟记录，支持日期、消费类型和支付方式组合筛选。SQL 页面读取现有数据库全量统计，不会写入或刷新数据库。
 
 ## 八、图表展示
 
