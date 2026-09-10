@@ -9,6 +9,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from database import DATABASE_FILENAME, refresh_database
+from sql_analysis import run_sql_analysis
+
 
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial Unicode MS"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -22,6 +25,8 @@ project_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(project_dir, "data.csv")
 output_dir = os.path.join(project_dir, "output")
 report_path = os.path.join(project_dir, "analysis_report.txt")
+database_path = os.path.join(project_dir, DATABASE_FILENAME)
+sql_report_path = os.path.join(project_dir, "sql_analysis_report.txt")
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -35,6 +40,62 @@ def save_chart(fig, filename):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print("图表已生成：output/{}".format(filename))
+
+
+def validate_pandas_sql_results(
+    csv_record_count,
+    pandas_total_amount,
+    pandas_student_ranking,
+    pandas_type_total,
+    sql_results,
+):
+    """核对 CSV、Pandas 与 SQL 的核心统计是否一致。"""
+    errors = []
+    sql_overview = sql_results["overview"].iloc[0]
+    sql_record_count = int(sql_overview["record_count"])
+    sql_total_amount = round(float(sql_overview["total_amount"]), 2)
+
+    pandas_top_student = str(pandas_student_ranking.index[0])
+    sql_top_student = str(
+        sql_results["top_amount_students"].iloc[0]["student_id"]
+    )
+
+    pandas_category_totals = {
+        str(category): round(float(amount), 2)
+        for category, amount in pandas_type_total.iteritems()
+    }
+    sql_category_totals = {
+        str(row["category"]): round(float(row["total_amount"]), 2)
+        for unused_index, row in sql_results["category_stats"].iterrows()
+    }
+
+    if csv_record_count != sql_record_count:
+        errors.append("CSV 与 SQLite 记录数不一致")
+    if round(float(pandas_total_amount), 2) != sql_total_amount:
+        errors.append("Pandas 与 SQL 总消费金额不一致")
+    if pandas_top_student != sql_top_student:
+        errors.append("Pandas 与 SQL 消费最高学生不一致")
+    if pandas_category_totals != sql_category_totals:
+        errors.append("Pandas 与 SQL 各消费类型总金额不一致")
+
+    print("\n【CSV / Pandas / SQL 一致性检查】")
+    print("CSV 记录数：{}；SQLite 记录数：{}".format(
+        csv_record_count, sql_record_count
+    ))
+    print("Pandas 总消费金额：{:.2f}；SQL 总消费金额：{:.2f}".format(
+        pandas_total_amount, sql_total_amount
+    ))
+    print("Pandas Top 1 学生：{}；SQL Top 1 学生：{}".format(
+        pandas_top_student, sql_top_student
+    ))
+    print("各消费类型总金额对比：{}".format(
+        "一致" if pandas_category_totals == sql_category_totals else "不一致"
+    ))
+
+    if errors:
+        raise ValueError("一致性检查失败：" + "；".join(errors))
+
+    print("一致性检查通过")
 
 
 # ==============================
@@ -496,6 +557,30 @@ ax.set_title("星期消费金额分布")
 ax.set_xlabel("星期")
 ax.set_ylabel("消费金额（元）")
 save_chart(fig, "星期消费分布.png")
+
+
+# ==============================
+# SQLite 数据库存储与 SQL 分析
+# ==============================
+
+print("\n正在将 data.csv 同步到 SQLite 数据库……")
+database_record_count = refresh_database(data_path, database_path)
+print("数据库已更新：campus_consumption.db")
+print("consumption_records 表记录数：{}".format(database_record_count))
+
+sql_results = run_sql_analysis(
+    database_path,
+    output_dir,
+    sql_report_path,
+)
+
+validate_pandas_sql_results(
+    raw_record_count,
+    total_amount,
+    student_ranking,
+    type_total,
+    sql_results,
+)
 
 print("\n================================")
 print("分析完成！")

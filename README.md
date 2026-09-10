@@ -2,25 +2,37 @@
 
 ## 一、项目简介
 
-这是一个兼容 Python 3.7 的校园消费数据分析项目。项目包含可重复的数据生成脚本、约 2000 条校园消费模拟数据、数据清洗、统计分析、可视化和自动文字报告。
+这是一个兼容 Python 3.7 的校园消费数据分析项目。项目从模拟数据生成开始，依次完成 CSV 存储、数据清洗、SQLite 数据库导入、SQL 聚合查询、Pandas 二次处理、Matplotlib 可视化和自动报告生成。
 
-模拟数据使用固定随机种子，并结合工作日与周末差异、学生活跃度、学生消费能力、消费类型价格区间、期末复习阶段以及支付偏好生成，因此每次运行都能得到一致且具有校园消费规律的数据。
+项目保留了 Pandas 分析路线，同时增加了独立的 SQLite / SQL 分析路线。两条路线会对记录数、总消费金额、消费最高学生和各消费类型金额进行一致性检查。
 
-## 二、运行环境
+## 二、技术栈与运行环境
 
 - Python 3.7.0
 - pandas 0.23.4
 - matplotlib 2.2.3
+- SQLite / SQL（Python 标准库 `sqlite3`）
+- Git / GitHub
 
-安装依赖：
+SQLite 不需要安装额外依赖，也没有使用 SQLAlchemy。安装项目依赖：
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-## 三、数据字段
+## 三、数据说明
 
-`data.csv` 保持以下 5 个字段：
+`generate_data.py` 使用固定随机种子 `20260910` 生成 2000 条、120 名学生的模拟校园消费记录，日期范围为 2026-03-01 至 2026-06-30。
+
+模拟规则包括：
+
+- 工作日消费活跃度高于周末
+- 周末增加超市、水果店和体育健身消费倾向
+- 期末阶段增加图书文具、打印复印和饮料消费倾向
+- 不同学生具有稳定的活跃度、消费水平和支付偏好
+- 不同消费类型具有各自的典型金额和合理上下限
+
+`data.csv` 保持以下字段：
 
 - 日期
 - 学生ID
@@ -28,72 +40,107 @@ python -m pip install -r requirements.txt
 - 消费金额
 - 支付方式
 
-当前大样本由 `generate_data.py` 生成。升级前的 15 条小型示例数据保存在 `data_sample_backup.csv`。
+升级前的 15 条小型数据保存在 `data_sample_backup.csv`。
 
-## 四、主要功能
+本项目使用模拟生成的校园消费数据，仅用于学习和数据分析项目展示，不包含真实学生隐私数据。
 
-### 1. 可重复的模拟数据
+## 四、完整数据处理流程
 
-- 固定随机种子 `20260910`
-- 生成 2000 条记录、120 名学生的数据
-- 覆盖 2026-03-01 至 2026-06-30
-- 工作日的校园消费活跃度高于周末
-- 周末增加超市、水果店和体育健身消费倾向
-- 期末阶段增加图书文具、打印复印和饮料消费倾向
-- 不同学生具有稳定的活跃度、消费水平和支付偏好
-- 不同消费类型具有各自的典型金额和合理上下限
+```text
+generate_data.py
+        ↓
+     data.csv
+        ↓
+      main.py
+      ↙    ↘
+  Pandas   SQLite 数据库
+     ↓          ↓
+统计与清洗     SQL 查询分析
+     ↓          ↓
+     └──→ Pandas DataFrame
+                    ↓
+               Matplotlib
+                    ↓
+      analysis_report.txt
+      sql_analysis_report.txt
+      output/ 下的分析图表
+```
 
-### 2. 数据检查与清洗
+`main.py` 是项目总入口。每次运行都会保留并执行第四轮的 Pandas 分析，同时重建 SQLite 表内数据、执行 SQL 查询、生成 SQL 图表和 SQL 报告。
 
-- 检查必要字段、缺失值和重复记录
-- 检查消费金额与日期格式
-- 删除缺少必要信息、无法用于分析或金额非正数的记录
-- 大数据预览仅显示前 10 条，避免控制台输出过长
+## 五、主要功能
 
-### 3. 整体与学生分析
+### 1. 数据检查与 Pandas 分析
 
-- 记录数、学生数、活跃天数和日期范围
-- 总消费、平均每笔消费、消费金额中位数
-- 日均消费、人均累计消费、单笔最高和最低金额
-- 学生消费金额排行榜 Top 10
-- 消费次数最多的学生
-- Top 10 学生消费金额占比
+- 检查字段、缺失值、重复值、日期和金额格式
+- 计算记录数、学生数、总消费、均值、中位数和人均消费
+- 展示学生消费金额 Top 10
+- 分析消费类型、支付方式、每日、月度和星期趋势
+- 对比工作日与周末消费
+- 生成 `analysis_report.txt` 和原有 8 张图表
 
-### 4. 类型、支付和时间分析
+### 2. SQLite 数据库存储
 
-- 各消费类型的次数、总金额和笔均金额
-- 各支付方式的次数和总金额
-- 每日消费趋势与高峰日期
-- 月度消费金额和记录数
-- 星期消费金额分布
-- 工作日与周末的天数、笔数、总金额、笔均金额和日均金额对比
-- 周末消费金额占比
+`database.py` 使用标准库 `sqlite3`：
 
-### 5. 自动报告与可视化
+- 创建 `campus_consumption.db`
+- 创建 `consumption_records` 表和查询索引
+- 导入前验证 CSV 字段、日期、金额和空值
+- 验证通过后在同一事务中清空旧数据并重新导入
+- 重复运行不会不断追加数据
+- 提供连接、建表、导入、基础查询和关闭连接函数
 
-`main.py` 会更新 `analysis_report.txt`，并将 8 张图表统一保存到 `output/`：
+数据库表字段：
 
-- `消费类型统计.png`
-- `每日消费趋势.png`
-- `学生消费排行榜.png`
-- `消费类型占比.png`
-- `支付方式统计.png`
-- `工作日周末消费对比.png`
-- `月度消费趋势.png`
-- `星期消费分布.png`
+| 字段 | SQLite 类型 | 说明 |
+| --- | --- | --- |
+| `id` | INTEGER | 自增主键 |
+| `date` | TEXT | 消费日期，格式为 YYYY-MM-DD |
+| `student_id` | TEXT | 学生编号 |
+| `category` | TEXT | 消费类型 |
+| `amount` | REAL | 消费金额，必须大于 0 |
+| `payment_method` | TEXT | 支付方式 |
 
-## 五、项目结构
+### 3. SQL 分析能力
+
+`sql_analysis.py` 先通过 SQL 完成筛选、分组和聚合，再使用 `pd.read_sql_query()` 转换为 Pandas DataFrame。主要查询包括：
+
+- `COUNT`、`SUM`、`AVG`：数据库概况和消费概况
+- `GROUP BY`：学生、消费类型、支付方式、每日和月度汇总
+- `ORDER BY` 与 `LIMIT`：消费金额 Top 10、消费次数 Top 10、最高金额记录
+- `WHERE amount >= ?`：筛选高额消费记录
+- `strftime('%Y-%m', date)`：按月统计
+- `strftime('%w', date)` 与 `CASE`：判断工作日和周末
+
+SQL 查询保持简洁，便于学习和面试时逐条解释。
+
+### 4. 自动一致性检查
+
+`main.py` 会自动核对：
+
+- CSV 记录数与 SQLite 表记录数
+- Pandas 总消费金额与 SQL `SUM(amount)`
+- Pandas 与 SQL 的消费金额 Top 1 学生
+- Pandas 与 SQL 的各消费类型总金额
+
+金额统一保留两位小数后比较。如果结果不一致，程序会给出中文错误信息并停止。
+
+## 六、项目结构
 
 ```text
 campus-consumption-analysis/
 ├── generate_data.py          # 使用固定随机种子生成模拟数据
-├── main.py                   # 数据清洗、分析、绘图和报告生成
+├── main.py                   # 项目总入口，运行 Pandas 与 SQL 两条分析流程
+├── database.py               # SQLite 连接、建表、CSV 验证和可重复导入
+├── sql_analysis.py           # SQL 查询、结果展示、SQL 图表和报告生成
 ├── data.csv                  # 当前 2000 条模拟校园消费数据
-├── data_sample_backup.csv    # 升级前的小型示例数据备份
-├── requirements.txt          # 指定兼容版本依赖
-├── analysis_report.txt       # 自动生成的文字分析报告
+├── data_sample_backup.csv    # 第四轮升级前的小型数据备份
+├── campus_consumption.db     # 自动生成的 SQLite 数据库
+├── analysis_report.txt       # Pandas 分析自动报告
+├── sql_analysis_report.txt   # SQL 查询结果自动报告
+├── requirements.txt          # pandas 和 matplotlib 兼容版本
 ├── README.md                 # 项目说明
-└── output/                   # main.py 统一输出的全部图表
+└── output/                   # 全部分析图表
     ├── 消费类型统计.png
     ├── 每日消费趋势.png
     ├── 学生消费排行榜.png
@@ -101,10 +148,12 @@ campus-consumption-analysis/
     ├── 支付方式统计.png
     ├── 工作日周末消费对比.png
     ├── 月度消费趋势.png
-    └── 星期消费分布.png
+    ├── 星期消费分布.png
+    ├── sql学生消费Top10.png
+    └── sql月度消费趋势.png
 ```
 
-## 六、运行步骤
+## 七、运行步骤
 
 在项目目录中依次执行：
 
@@ -113,30 +162,52 @@ python generate_data.py
 python main.py
 ```
 
-第一条命令会用同一随机种子重新生成 `data.csv`。第二条命令会读取并清洗数据、在控制台输出主要指标、更新 `analysis_report.txt`，并刷新 `output/` 中的全部图表。
+`python generate_data.py` 会用固定随机种子重新生成 `data.csv`。
 
-如果只希望重新分析当前 `data.csv`，可以直接执行：
+`python main.py` 会依次完成：
+
+1. CSV 读取和数据清洗
+2. Pandas 统计分析
+3. 原有 8 张图表和 `analysis_report.txt`
+4. SQLite 数据库更新
+5. SQL 查询与 Pandas DataFrame 转换
+6. 两张 SQL 图表和 `sql_analysis_report.txt`
+7. CSV、Pandas 与 SQL 一致性检查
+
+也可以单独运行数据库或 SQL 模块：
 
 ```bash
-python main.py
+python database.py
+python sql_analysis.py
 ```
 
-## 七、数据分析流程
+## 八、图表展示
 
-```text
-按校园消费规律生成模拟数据
-    ↓
-检查字段、缺失值、重复值、金额和日期
-    ↓
-清洗无效记录并预览前 10 条
-    ↓
-计算整体、学生 Top 10、类型和支付指标
-    ↓
-计算每日、月度、星期及工作日/周末指标
-    ↓
-生成文字报告和 output/ 下的 8 张图表
-```
+### Pandas 学生消费排行榜
 
-## 八、说明
+![Pandas 学生消费排行榜](output/学生消费排行榜.png)
 
-本项目中的消费记录是模拟数据，仅用于数据分析学习、功能演示和作品展示，不代表任何真实学生或学校的实际消费情况。
+### 工作日与周末消费对比
+
+![工作日与周末消费对比](output/工作日周末消费对比.png)
+
+### SQL 学生消费 Top 10
+
+该图的数据来自 SQL 的 `GROUP BY`、`ORDER BY` 和 `LIMIT 10` 查询结果。
+
+![SQL 学生消费 Top 10](output/sql学生消费Top10.png)
+
+### SQL 月度消费趋势
+
+该图的数据来自 SQL 使用 SQLite 日期函数完成的月度汇总结果。
+
+![SQL 月度消费趋势](output/sql月度消费趋势.png)
+
+## 九、项目特点
+
+- 同一份数据同时经过 Pandas 与 SQL 分析，便于比较两种处理方式
+- SQL 负责核心筛选和聚合，不是仅用于存储
+- SQL 结果通过 Pandas DataFrame 进入 Matplotlib 可视化
+- 数据库采用事务式全量刷新，运行结果稳定且可重复
+- 两份报告均根据实际计算结果动态生成，没有硬编码统计数字
+- 代码结构保持清晰，适合作为 Python、Pandas、SQLite 和 SQL 综合练习项目
